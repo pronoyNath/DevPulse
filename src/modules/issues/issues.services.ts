@@ -1,5 +1,5 @@
 import { pool } from "../../db";
-import type { ICreateIssue } from "./issues.interface";
+import type { ICreateIssue, IUpdateIssue } from "./issues.interface";
 import { StatusCodes } from "http-status-codes";
 
 const createIssue = async (payload: ICreateIssue, reporterId: number) => {
@@ -112,8 +112,105 @@ const getSingleIssue = async (id: number) => {
   return { ...rest, reporter: reporterResult.rows[0] ?? null };
 };
 
+const updateIssue = async (
+  id: number,
+  payload: IUpdateIssue,
+  requesterId: number,
+  requesterRole: string,
+) => {
+  const issueResult = await pool.query("SELECT * FROM issues WHERE id = $1", [id]);
+
+  if (issueResult.rows.length === 0) {
+    throw Object.assign(new Error("Issue not found"), {
+      statusCode: StatusCodes.NOT_FOUND,
+    });
+  }
+
+  const issue = issueResult.rows[0];
+
+  if (requesterRole === "contributor") {
+    if (issue.reporter_id !== requesterId) {
+      throw Object.assign(new Error("Forbidden: you can only update your own issues"), {
+        statusCode: StatusCodes.FORBIDDEN,
+      });
+    }
+    if (issue.status !== "open") {
+      throw Object.assign(new Error("Conflict: contributors can only edit open issues"), {
+        statusCode: StatusCodes.CONFLICT,
+      });
+    }
+  }
+
+  const setClauses: string[] = [];
+  const params: unknown[] = [];
+  let paramCount = 0;
+
+  if (payload.title !== undefined) {
+    if (payload.title.length > 150) {
+      throw Object.assign(new Error("title must be 150 characters or less"), {
+        statusCode: StatusCodes.BAD_REQUEST,
+      });
+    }
+    paramCount++;
+    setClauses.push(`title = $${paramCount}`);
+    params.push(payload.title);
+  }
+
+  if (payload.description !== undefined) {
+    if (payload.description.length < 20) {
+      throw Object.assign(new Error("description must be at least 20 characters"), {
+        statusCode: StatusCodes.BAD_REQUEST,
+      });
+    }
+    paramCount++;
+    setClauses.push(`description = $${paramCount}`);
+    params.push(payload.description);
+  }
+
+  if (payload.type !== undefined) {
+    if (!["bug", "feature_request"].includes(payload.type)) {
+      throw Object.assign(new Error("type must be bug or feature_request"), {
+        statusCode: StatusCodes.BAD_REQUEST,
+      });
+    }
+    paramCount++;
+    setClauses.push(`type = $${paramCount}`);
+    params.push(payload.type);
+  }
+
+  // only maintainers can change workflow status
+  if (payload.status !== undefined && requesterRole === "maintainer") {
+    if (!["open", "in_progress", "resolved"].includes(payload.status)) {
+      throw Object.assign(new Error("status must be open, in_progress, or resolved"), {
+        statusCode: StatusCodes.BAD_REQUEST,
+      });
+    }
+    paramCount++;
+    setClauses.push(`status = $${paramCount}`);
+    params.push(payload.status);
+  }
+
+  if (setClauses.length === 0) {
+    throw Object.assign(new Error("No valid fields to update"), {
+      statusCode: StatusCodes.BAD_REQUEST,
+    });
+  }
+
+  setClauses.push("updated_at = NOW()");
+  paramCount++;
+  params.push(id);
+
+  const result = await pool.query(
+    `UPDATE issues SET ${setClauses.join(", ")} WHERE id = $${paramCount} RETURNING *`,
+    params,
+  );
+
+  return result.rows[0];
+};
+
 export const issuesService = {
   createIssue,
   getAllIssues,
   getSingleIssue,
+  updateIssue,
 };

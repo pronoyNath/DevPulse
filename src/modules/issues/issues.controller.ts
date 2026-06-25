@@ -66,8 +66,35 @@ const getSingleIssue = async (req: Request, res: Response) => {
   }
 };
 
+const updateIssue = async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params["id"] ?? "");
+    if (isNaN(id)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: "Invalid issue id",
+      });
+    }
+    const requesterId = req.user!.id;
+    const requesterRole = req.user!.role as string;
+    const result = await issuesService.updateIssue(id, req.body, requesterId, requesterRole);
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Issue updated successfully",
+      data: result,
+    });
+  } catch (err: any) {
+    return res.status(err.statusCode || StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: err.message,
+      errors: err,
+    });
+  }
+};
+
 export const issuesController = {
   createIssue,
   getAllIssues,
   getSingleIssue,
+  updateIssue,
 };

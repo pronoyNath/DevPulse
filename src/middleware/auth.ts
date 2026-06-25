@@ -1,66 +1,39 @@
 import type { NextFunction, Request, Response } from "express";
 import config from "../config";
 import jwt, { type JwtPayload } from "jsonwebtoken";
-import { pool } from "../db";
 import type { UserRole } from "../types";
-import sendResponse from "../utility/sendResponse";
-
+import { StatusCodes } from "http-status-codes";
 
 const auth = (...roles: UserRole[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const token = req.headers.authorization;
       if (!token) {
-        return res.status(401).json({
+        return res.status(StatusCodes.UNAUTHORIZED).json({
           success: false,
-          message: "Unauthorized",
+          message: "Unauthorized: no token provided",
         });
       }
 
-      // decoded token
       const decodedToken = jwt.verify(
         token as string,
         config.secretKey as string,
-      ) as JwtPayload;
+      ) as JwtPayload & { id: number; name: string; role: string };
 
-      const userData = await pool.query(
-        "SELECT * FROM users WHERE email = $1",
-        [decodedToken.email],
-      );
-
-      if (userData.rows.length === 0) {
-        return res.status(401).json({
+      if (roles.length > 0 && !roles.includes(decodedToken.role as UserRole)) {
+        return res.status(StatusCodes.FORBIDDEN).json({
           success: false,
-          message: "user not found",
-        });
-      }
-
-      const user = userData.rows[0];
-
-      if (!user?.is_active) {
-        return res.status(403).json({
-          success: false,
-          message: "User is not active",
-        });
-      }
-
-      if (roles.length > 0 && !roles.includes(user.role)) {
-        return res.status(403).json({
-          success: false,
-          message: "Forbidden! This user does not have the required role to access this resource",
+          message: "Forbidden: insufficient permissions",
         });
       }
 
       req.user = decodedToken;
-
       next();
     } catch (error) {
-      console.error("Authentication error:", error);
-      return sendResponse(res, {
-        statusCode: 401,
+      return res.status(StatusCodes.UNAUTHORIZED).json({
         success: false,
-        message: "Invalid token",
-        error: error,
+        message: "Invalid or expired token",
+        errors: error,
       });
     }
   };

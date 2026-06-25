@@ -1,107 +1,42 @@
 import bcrypt from "bcryptjs";
 import { pool } from "../../db";
-import type { ILogin } from "./auth.interface";
-import jwt, { type JwtPayload } from "jsonwebtoken";
-import config from "../../config";
+import type { ISignup } from "./auth.interface";
+import { StatusCodes } from "http-status-codes";
 
-const loginUserIntoDB = async (payload: ILogin) => {
-  const { email, password } = payload;
+const signupUserIntoDB = async (payload: ISignup) => {
+  const { name, email, password, role = "contributor" } = payload;
 
-  // check if user exists in DB
-  const userData = await pool.query("SELECT * FROM users WHERE email = $1", [
-    email,
-  ]);
-
-  if (userData.rows.length === 0) {
-    throw new Error("Invalid email or password");
-  }
-
-  // compare password with hash password in DB
-  const matchPassword = await bcrypt.compare(
-    password,
-    userData.rows[0].password,
-  );
-
-  if (!matchPassword) {
-    throw new Error("Invalid email or password");
-  }
-
-  //   generate a JWT token
-  const jwtpayload = {
-    id: userData.rows[0].id,
-    name: userData.rows[0].name,
-    email: userData.rows[0].email,
-    role: userData.rows[0].role,
-    is_active: userData.rows[0].is_active,
-  };
-
-  const accessToken = jwt.sign(jwtpayload, config.secretKey as string, {
-    expiresIn: config.jwtExpiresIn as jwt.SignOptions["expiresIn"] & {},
-  });
-
-  const refreshToken = jwt.sign(
-    jwtpayload,
-    config.refreshTokenSecretKey as string,
-    {
-      expiresIn:
-        config.refreshTokenExpiresIn as jwt.SignOptions["expiresIn"] & {},
-    },
-  );
-
-  return {
-    access_token: accessToken,
-    refresh_token: refreshToken,
-  };
-};
-
-const generateRefreshToken = async (token: string) => {
-  try {
-    if (!token) {
-      throw new Error("Unauthorized");
-    }
-
-    // decoded token
-    const decodedToken = jwt.verify(
-      token as string,
-      config.refreshTokenSecretKey as string,
-    ) as JwtPayload;
-
-    const userData = await pool.query("SELECT * FROM users WHERE email = $1", [
-      decodedToken.email,
-    ]);
-
-    if (userData.rows.length === 0) {
-      throw new Error("user not found");
-    }
-
-    const user = userData.rows[0];
-
-    if (!user?.is_active) {
-      throw new Error("User is not active");
-    }
-
-    //   generate a JWT token
-    const jwtpayload = {
-      id: userData.rows[0].id,
-      name: userData.rows[0].name,
-      email: userData.rows[0].email,
-      role: userData.rows[0].role,
-      is_active: userData.rows[0].is_active,
-    };
-
-    const accessToken = jwt.sign(jwtpayload, config.refreshTokenSecretKey as string, {
-      expiresIn: config.refreshTokenExpiresIn as jwt.SignOptions["expiresIn"] & {},
+  if (!name || !email || !password) {
+    throw Object.assign(new Error("name, email, and password are required"), {
+      statusCode: StatusCodes.BAD_REQUEST,
     });
-
-    return {
-      access_token: accessToken,
-    };
-  } catch (error) {
-    return error;
   }
+
+  if (!["contributor", "maintainer"].includes(role)) {
+    throw Object.assign(new Error("role must be contributor or maintainer"), {
+      statusCode: StatusCodes.BAD_REQUEST,
+    });
+  }
+
+  const existing = await pool.query("SELECT id FROM users WHERE email = $1", [email]);
+  if (existing.rows.length > 0) {
+    throw Object.assign(new Error("Email already registered"), {
+      statusCode: StatusCodes.BAD_REQUEST,
+    });
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  const result = await pool.query(
+    `INSERT INTO users (name, email, password, role)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, name, email, role, created_at, updated_at`,
+    [name, email, hashedPassword, role],
+  );
+
+  return result.rows[0];
 };
 
 export const authService = {
-  generateRefreshToken,
-  loginUserIntoDB,
+  signupUserIntoDB,
 };

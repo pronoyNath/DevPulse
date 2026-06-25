@@ -92,9 +92,33 @@ const updateIssue = async (req: Request, res: Response) => {
   }
 };
 
+const deleteIssue = async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params["id"] ?? "");
+    if (isNaN(id)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: "Invalid issue id",
+      });
+    }
+    await issuesService.deleteIssue(id);
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Issue deleted successfully",
+    });
+  } catch (err: any) {
+    return res.status(err.statusCode || StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: err.message,
+      errors: err,
+    });
+  }
+};
+
 export const issuesController = {
   createIssue,
   getAllIssues,
   getSingleIssue,
   updateIssue,
+  deleteIssue,
 };

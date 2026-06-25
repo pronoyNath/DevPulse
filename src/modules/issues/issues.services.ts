@@ -208,9 +208,22 @@ const updateIssue = async (
   return result.rows[0];
 };
 
+const deleteIssue = async (id: number) => {
+  const issueResult = await pool.query("SELECT id FROM issues WHERE id = $1", [id]);
+
+  if (issueResult.rows.length === 0) {
+    throw Object.assign(new Error("Issue not found"), {
+      statusCode: StatusCodes.NOT_FOUND,
+    });
+  }
+
+  await pool.query("DELETE FROM issues WHERE id = $1", [id]);
+};
+
 export const issuesService = {
   createIssue,
   getAllIssues,
   getSingleIssue,
   updateIssue,
+  deleteIssue,
 };

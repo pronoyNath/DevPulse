@@ -39,6 +39,56 @@ const createIssue = async (payload: ICreateIssue, reporterId: number) => {
   return result.rows[0];
 };
 
+const getAllIssues = async (query: { sort?: string; type?: string; status?: string }) => {
+  const { sort = "newest", type, status } = query;
+  const order = sort === "oldest" ? "ASC" : "DESC";
+
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  let paramCount = 0;
+
+  if (type) {
+    paramCount++;
+    conditions.push(`type = $${paramCount}`);
+    params.push(type);
+  }
+
+  if (status) {
+    paramCount++;
+    conditions.push(`status = $${paramCount}`);
+    params.push(status);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const issuesResult = await pool.query(
+    `SELECT id, title, description, type, status, reporter_id, created_at, updated_at
+     FROM issues ${whereClause} ORDER BY created_at ${order}`,
+    params,
+  );
+
+  const issues = issuesResult.rows;
+  if (issues.length === 0) return [];
+
+  // batch fetch reporters without JOIN
+  const reporterIds = [...new Set(issues.map((i) => i.reporter_id as number))];
+  const reportersResult = await pool.query(
+    "SELECT id, name, role FROM users WHERE id = ANY($1::int[])",
+    [reporterIds],
+  );
+
+  const reporterMap = new Map<number, { id: number; name: string; role: string }>();
+  for (const r of reportersResult.rows) {
+    reporterMap.set(r.id as number, r);
+  }
+
+  return issues.map((issue) => {
+    const { reporter_id, ...rest } = issue;
+    return { ...rest, reporter: reporterMap.get(reporter_id as number) ?? null };
+  });
+};
+
 export const issuesService = {
   createIssue,
+  getAllIssues,
 };

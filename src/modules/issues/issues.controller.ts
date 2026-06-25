@@ -20,6 +20,29 @@ const createIssue = async (req: Request, res: Response) => {
   }
 };
 
+const getAllIssues = async (req: Request, res: Response) => {
+  try {
+    const { sort, type, status } = req.query as {
+      sort?: string;
+      type?: string;
+      status?: string;
+    };
+    const result = await issuesService.getAllIssues({ sort, type, status });
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Issues retrived successfully",
+      data: result,
+    });
+  } catch (err: any) {
+    return res.status(err.statusCode || StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: err.message,
+      errors: err,
+    });
+  }
+};
+
 export const issuesController = {
   createIssue,
+  getAllIssues,
 };

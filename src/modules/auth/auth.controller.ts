@@ -19,6 +19,24 @@ const signup = async (req: Request, res: Response) => {
   }
 };
 
+const login = async (req: Request, res: Response) => {
+  try {
+    const result = await authService.loginUserIntoDB(req.body);
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Login successful",
+      data: result,
+    });
+  } catch (err: any) {
+    return res.status(err.statusCode || StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: err.message,
+      errors: err,
+    });
+  }
+};
+
 export const authController = {
   signup,
+  login,
 };

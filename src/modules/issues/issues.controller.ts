@@ -42,7 +42,32 @@ const getAllIssues = async (req: Request, res: Response) => {
   }
 };
 
+const getSingleIssue = async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params["id"] ?? "");
+    if (isNaN(id)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: "Invalid issue id",
+      });
+    }
+    const result = await issuesService.getSingleIssue(id);
+    return res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Issue retrived successfully",
+      data: result,
+    });
+  } catch (err: any) {
+    return res.status(err.statusCode || StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: err.message,
+      errors: err,
+    });
+  }
+};
+
 export const issuesController = {
   createIssue,
   getAllIssues,
+  getSingleIssue,
 };

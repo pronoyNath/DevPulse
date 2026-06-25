@@ -88,7 +88,32 @@ const getAllIssues = async (query: { sort?: string; type?: string; status?: stri
   });
 };
 
+const getSingleIssue = async (id: number) => {
+  const issueResult = await pool.query(
+    `SELECT id, title, description, type, status, reporter_id, created_at, updated_at
+     FROM issues WHERE id = $1`,
+    [id],
+  );
+
+  if (issueResult.rows.length === 0) {
+    throw Object.assign(new Error("Issue not found"), {
+      statusCode: StatusCodes.NOT_FOUND,
+    });
+  }
+
+  const issue = issueResult.rows[0];
+
+  const reporterResult = await pool.query(
+    "SELECT id, name, role FROM users WHERE id = $1",
+    [issue.reporter_id],
+  );
+
+  const { reporter_id, ...rest } = issue;
+  return { ...rest, reporter: reporterResult.rows[0] ?? null };
+};
+
 export const issuesService = {
   createIssue,
   getAllIssues,
+  getSingleIssue,
 };

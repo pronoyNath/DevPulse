@@ -27,7 +27,11 @@ const getAllIssues = async (req: Request, res: Response) => {
       type?: string;
       status?: string;
     };
-    const result = await issuesService.getAllIssues({ sort, type, status });
+    const query: { sort?: string; type?: string; status?: string } = {};
+    if (sort) query.sort = sort;
+    if (type) query.type = type;
+    if (status) query.status = status;
+    const result = await issuesService.getAllIssues(query);
     return res.status(StatusCodes.OK).json({
       success: true,
       message: "Issues retrived successfully",
@@ -44,7 +48,7 @@ const getAllIssues = async (req: Request, res: Response) => {
 
 const getSingleIssue = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params["id"] ?? "");
+    const id = parseInt(req.params["id"] as string, 10);
     if (isNaN(id)) {
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
@@ -68,7 +72,7 @@ const getSingleIssue = async (req: Request, res: Response) => {
 
 const updateIssue = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params["id"] ?? "");
+    const id = parseInt(req.params["id"] as string, 10);
     if (isNaN(id)) {
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
@@ -94,7 +98,7 @@ const updateIssue = async (req: Request, res: Response) => {
 
 const deleteIssue = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params["id"] ?? "");
+    const id = parseInt(req.params["id"] as string, 10);
     if (isNaN(id)) {
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
